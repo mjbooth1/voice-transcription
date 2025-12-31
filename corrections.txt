@@ -1,0 +1,45 @@
+# Smart Corrections for Voice Transcription
+# Edit this file anytime - changes apply immediately
+# Format: wrong:right (case-insensitive matching)
+
+# === NAME CORRECTIONS ===
+# Fix common name misspellings
+Julian:Julien
+Kieran:Kieron
+Casey:K.C.
+KC:K.C.
+Marry:Mary
+Andy:Andi
+Annalise:Annelise
+Sophia:Sofia
+Megan:Meaghan
+Al-Har:Alhera
+Al-Hira:Alhera
+Alhara:Alhera
+
+# === TECHNICAL TERM CORRECTIONS ===
+# Fix common technical term errors
+bays:Bayes
+# Note: "engine" -> "NGENE" might be too broad, consider "the engine" -> "the NGENE"
+# engine:NGENE
+ngene:NGENE
+Marnell:Marnel
+
+# === @MENTION NAMES ===
+# These names will auto-convert "at Name" → "@Name"
+# Add/remove names as needed
+@names:Diane,Meg,Liz,Marnel,Ernest,Rob,Athena,Meredith,Amy,Julien,Kieron,Will,Jin,K.C.,Andrew,Joe H,Mary,Jackie,Andi,Chelsea,Hannah,Annelise,James,Isaac,Carly,Sofia,Mariah,Larissa,Meaghan,Olivia,Joe C,Alhera,Elaine,Stephanie,Pamela,Mike
+
+# === EXAMPLES OF USE ===
+# Speech: "at diane reviewed the ngene results"
+# Output: "@Diane reviewed the NGENE results"
+#
+# Speech: "julian used the bays model"
+# Output: "Julien used the Bayes model"
+
+# === INSTRUCTIONS ===
+# 1. To disable all corrections: Rename this file or set ENABLE_CORRECTIONS=False in code
+# 2. To add new corrections: Add line as "wrong:right"
+# 3. For new @mention names: Add to @names list separated by commas
+# 4. For capitalization fixes: Add to @terms list
+# 5. Comments start with # and are ignored

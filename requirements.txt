@@ -1,0 +1,37 @@
+# Core Streamlit
+streamlit>=1.49.1
+
+# Voice transcription (Whisper) - GPU accelerated
+faster-whisper>=1.2.0
+ctranslate2>=4.6.0
+nvidia-cudnn-cu12>=9.0.0
+sounddevice>=0.5.2
+
+# Audio processing
+numpy>=1.24.0
+scipy>=1.9.0
+
+# AI enhancement (Local Mistral via Ollama)
+requests>=2.32.5
+
+# Basic utilities
+PyYAML>=6.0.0
+
+# Windows toast notifications
+windows-toasts>=1.1.0
+
+# Clipboard management
+pyperclip>=1.8.2
+
+# Keyboard/mouse automation for pasting
+pynput>=1.7.6
+
+# Audio playback for TTS (Voice Mode)
+pygame>=2.5.0
+
+# OpenAI API
+openai>=1.0.0
+python-dotenv>=1.0.0
+
+# Smart corrections (Aho-Corasick algorithm)
+pyahocorasick>=2.0.0
