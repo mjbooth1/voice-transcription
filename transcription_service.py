@@ -37,8 +37,7 @@ class TranscriptionService:
 
         # Initialize corrections
         self.corrections_automaton = None
-        self.mentions_automaton = None
-        self._build_corrections_automatons()
+        self._build_corrections_automaton()
         
         # Use the same models folder as your main app
         self.models_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "models")
@@ -239,19 +238,16 @@ class TranscriptionService:
     # These methods handle auto-corrections for common transcription errors
     # To disable: Set ENABLE_CORRECTIONS = False in transcribe_audio_data method
 
-
-    def _build_corrections_automatons(self):
-        """Build separate Aho-Corasick automatons for corrections and @mentions."""
+    def _build_corrections_automaton(self):
+        """Build Aho-Corasick automaton for corrections."""
         corrections_file = os.path.join(os.path.dirname(__file__), "corrections.txt")
 
         if not os.path.exists(corrections_file):
             print("No corrections.txt file found - skipping corrections")
             self.corrections_automaton = None
-            self.mentions_automaton = None
             return
 
         corrections = {}
-        mentions = {}
 
         try:
             with open(corrections_file, 'r', encoding='utf-8') as f:
@@ -260,59 +256,29 @@ class TranscriptionService:
                     if not line or line.startswith('#'):
                         continue
 
-                    if line.startswith('@names:'):
-                        # Extract names for @mention conversion
-                        names_str = line.replace('@names:', '')
-                        at_names = [name.strip() for name in names_str.split(',')]
-
-                        # Store @mention patterns
-                        for name in at_names:
-                            pattern = f'at {name.lower()}'
-                            mentions[pattern] = name
-                        continue
-
                     if ':' in line:
                         wrong, right = line.split(':', 1)
                         wrong = wrong.strip().lower()
                         right = right.strip()
                         corrections[wrong] = right
 
-            # Build separate automatons
+            # Build automaton
             self.corrections_automaton = ahocorasick.Automaton()
-            self.mentions_automaton = ahocorasick.Automaton()
-
-            # Build corrections automaton
             for pattern, replacement in corrections.items():
                 self.corrections_automaton.add_word(pattern, replacement)
             self.corrections_automaton.make_automaton()
 
-            # Build mentions automaton
-            for pattern, replacement in mentions.items():
-                self.mentions_automaton.add_word(pattern, replacement)
-            self.mentions_automaton.make_automaton()
-
-            print(f"Built automatons: {len(corrections)} corrections, {len(mentions)} mentions")
+            print(f"Built corrections automaton: {len(corrections)} patterns")
 
         except Exception as e:
-            print(f"Error building corrections automatons: {e}")
+            print(f"Error building corrections automaton: {e}")
             self.corrections_automaton = None
-            self.mentions_automaton = None
 
     def apply_smart_corrections(self, text):
-        """Apply smart corrections using two-pass Aho-Corasick algorithm."""
-        if not self.corrections_automaton or not self.mentions_automaton:
+        """Apply smart corrections using Aho-Corasick algorithm."""
+        if not self.corrections_automaton:
             return text
 
-        # Pass 1: Apply word corrections
-        result = self._apply_corrections(text)
-
-        # Pass 2: Apply @mentions to corrected text
-        result = self._apply_mentions(result)
-
-        return result
-
-    def _apply_corrections(self, text):
-        """Apply word corrections using Aho-Corasick."""
         matches = []
         text_lower = text.lower()
 
@@ -336,34 +302,6 @@ class TranscriptionService:
         result = text
         for start, end, replacement in matches:
             result = result[:start] + replacement + result[end:]
-
-        return result
-
-    def _apply_mentions(self, text):
-        """Apply @mention conversions using Aho-Corasick."""
-        matches = []
-        text_lower = text.lower()
-
-        for end_idx, replacement in self.mentions_automaton.iter(text_lower):
-            # Find the pattern that matched
-            for pattern in self.mentions_automaton:
-                pattern_len = len(pattern)
-                if (end_idx >= pattern_len - 1 and
-                    text_lower[end_idx - pattern_len + 1:end_idx + 1] == pattern):
-                    start_idx = end_idx - pattern_len + 1
-                    matches.append((start_idx, end_idx + 1, replacement))
-                    break
-
-        if not matches:
-            return text
-
-        # Sort by position (reverse order to preserve indices)
-        matches.sort(reverse=True)
-
-        # Apply replacements
-        result = text
-        for start, end, replacement in matches:
-            result = result[:start] + f'@{replacement}' + result[end:]
 
         return result
 
