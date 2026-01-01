@@ -6,8 +6,13 @@
 # Fix common technical term errors
 bays:Bayes
 ngene:NGENE
+nGene: NGENE
+nGine: NGENE
+
 
 # === INSTRUCTIONS ===
 # 1. To disable all corrections: Rename this file or set ENABLE_CORRECTIONS=False in code
 # 2. To add new corrections: Add line as "wrong:right"
 # 3. Comments start with # and are ignored
+
+

@@ -26,9 +26,6 @@ pyperclip>=1.8.2
 # Keyboard/mouse automation for pasting
 pynput>=1.7.6
 
-# Audio playback for TTS (Voice Mode)
-pygame>=2.5.0
-
 # OpenAI API
 openai>=1.0.0
 python-dotenv>=1.0.0

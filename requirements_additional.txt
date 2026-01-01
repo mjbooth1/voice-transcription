@@ -10,11 +10,5 @@ pyperclip>=1.8.2
 # Keyboard/mouse automation for pasting
 pynput>=1.7.6
 
-# Audio playback for TTS (Voice Mode)
-pygame>=2.5.0
-
-# Local Piper TTS (Python module - no executable required)
-piper-tts>=1.2.0
-
 # Socket communication (already included in Python standard library)
 # All other dependencies (faster-whisper, sounddevice, etc.) already in main requirements.txt

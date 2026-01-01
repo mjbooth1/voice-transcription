@@ -31,39 +31,20 @@ start "GPT Service" pythonw gpt_service.py
 REM Wait a moment for GPT service to initialize
 timeout /t 2 /nobreak >nul
 
-REM Start TTS services based on configuration
-echo Starting TTS services...
-
-REM Always start OpenAI TTS service (for fallback)
-start "OpenAI TTS Service" pythonw tts_service.py
-
-REM Wait a moment for OpenAI TTS service to initialize
-timeout /t 2 /nobreak >nul
-
-REM Check if local TTS should be started (simplified check)
-REM Note: This is a basic check - the service will determine the actual mode
-echo Starting Local TTS service (conditional based on TTS_MODE)...
-start "Local TTS Service" pythonw local_tts_service.py
-
-REM Wait a moment for Local TTS service to initialize
-timeout /t 2 /nobreak >nul
-
-REM Start the voice hotkey listener (windowless) - now includes Ctrl+Alt+Q
+REM Start the voice hotkey listener (windowless)
 echo Starting voice hotkey listener with GPT command...
 start "Voice Hotkey" pythonw hotkey_listener.py
 
-echo Voice transcription and GPT-4o DUAL TTS command center started!
+echo Voice transcription and GPT-4o command center started!
 echo - Transcription service running with GPU-loaded turbo model
 echo - GPT-4o service ready for flexible AI commands
-echo - DUAL TTS system: OpenAI + Local Piper (switch via TTS_MODE)
 echo - Voice hotkey listener ready with mouse button support
 echo.
 echo Available modes:
 echo   * Forward button - Normal recording (types at cursor)
 echo   * Ctrl+Forward - GPT direct mode (transcription only)
 echo   * Shift+Forward - GPT with clipboard (transcription + clipboard)
-echo   * Alt+Forward - VOICE MODE (speak → GPT → hear response)
-echo   * Back button or Escape - Stop recording or abort TTS playback
+echo   * Back button or Escape - Stop recording
 echo   * Ctrl+Alt+A - Keyboard fallback for Forward
 echo.
 echo All services are now running independently.

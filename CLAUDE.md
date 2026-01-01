@@ -1,41 +1,29 @@
 # Claude Code IDE
 
 ## Project Overview
-A comprehensive Streamlit-based IDE interface for Claude Code CLI featuring advanced voice interaction capabilities. The system provides real-time voice transcription, dual text-to-speech systems, and intelligent text processing through a combination of local and cloud-based AI services.
+A comprehensive Streamlit-based IDE interface for Claude Code CLI featuring advanced voice interaction capabilities. The system provides real-time voice transcription and intelligent text processing through a combination of local and cloud-based AI services.
 
 ## Core Features
 
 ### Voice Transcription System
 - **GPU-accelerated Whisper turbo** - High-quality speech-to-text with RTX 2070 float16 optimization
 - **CUDA optimized** - Ultra-fast real-time transcription performance
-- **Smart corrections system** - Auto-fixes common misspellings and programming patterns
+- **Smart corrections system** - Auto-fixes common misspellings and technical terms
 - **Quality-focused transcription** - Superior punctuation, capitalization, and sentence structure
 - **System-wide hotkeys** - Works in any Windows application (Ctrl+Alt+A)
 - **Real-time recording** - Live voice activity visualization and instant feedback
 - **Background services** - Pre-loaded models for 0.03 second response time
 - **Tensor Core acceleration** - RTX 2070's 288 Tensor Cores fully utilized with float16 compute type
 
-### Dual Text-to-Speech Architecture
-- **Local Piper TTS** - Ultra-fast (~500ms) Python-based synthesis with MIT license
-  - Voices: amy (warm female), lessac (professional narrator), ryan (clear male)
-  - IT security compliant - No executable files, pure Python module
-- **OpenAI TTS** - Premium cloud service with 11 voice options
-  - Voices: alloy, echo, fable, onyx, nova, shimmer, ash, ballad, coral, sage, verse
-- **Intelligent switching** - Configure via TTS_MODE environment variable
-
 ### AI Command Processing
-- **4 specialized GPT-4o commands** - Enhancement, summarization, Slack rewrite, email formatting
-- **Voice Mode** - Complete conversation loop (speak → GPT → hear response)
+- **3 specialized GPT-4o modes** - Direct transcription, GPT processing, clipboard integration
 - **Context-aware processing** - Clipboard integration and cursor-based text insertion
 - **Text normalization** - Automatically cleans GPT formatting for plain text applications
 
 ### Smart Corrections System
 - **Auto-corrections** - Fixes common transcription errors with <5ms overhead
-- **Programming patterns** - "QD underscore delete" → "QD_Delete", "dumb A1" → "duma1"
-- **@mention conversion** - "at Mike" → "@Mike" for team communication
-- **Technical term fixes** - Julian→Julien, Kieran→Kieron, bays→Bayes, engine→NGENE
+- **Technical term fixes** - bays→Bayes, ngene→NGENE
 - **User-editable** - Simple corrections.txt file for custom corrections
-- **Context-aware** - Won't change "dumb" in normal usage, only variable naming
 - **Easy toggle** - Single flag to enable/disable entire system
 
 ## System Architecture
@@ -43,11 +31,9 @@ A comprehensive Streamlit-based IDE interface for Claude Code CLI featuring adva
 ### Core Components
 - **Main Streamlit App** (`app.py`) - Web interface with voice activity visualization
 - **Voice Handler** (`voice_handler.py`) - Real-time audio recording and Whisper integration
-- **Background Services** - 4 independent services for system-wide functionality:
+- **Background Services** - 3 independent services for system-wide functionality:
   - Transcription service (Whisper model management)
   - GPT service (AI command processing)
-  - Local TTS service (Piper synthesis)
-  - OpenAI TTS service (cloud synthesis)
   - Hotkey listener (mouse/keyboard integration)
 
 ### Technical Stack
@@ -56,8 +42,7 @@ A comprehensive Streamlit-based IDE interface for Claude Code CLI featuring adva
 - **Streamlit** for web interface
 - **faster-whisper** with turbo model + float16 RTX 2070 Tensor Core optimization
 - **CTranslate2 4.6.0** with CUDA support for neural network inference
-- **Piper TTS** Python module (piper-tts>=1.2.0)
-- **OpenAI API** for GPT-4o and cloud TTS
+- **OpenAI API** for GPT-4o
 
 ## Installation & Setup
 
@@ -81,19 +66,11 @@ ollama serve
 ollama pull mistral:latest
 ```
 
-### Voice Model Setup
-Place Piper voice models in `./models/piper/`:
-- Required files: `en_US-{voice}-{quality}.onnx` and `en_US-{voice}-{quality}.onnx.json`
-- Available voices: amy, lessac, ryan
-- Quality levels: high, medium, low
-
 ### System Service Configuration
-1. **Configure TTS mode**: Edit `voice-transcription\.env`
+1. **Configure API key**: Edit `voice-transcription\.env`
    ```env
-   TTS_MODE=local          # Options: 'local' or 'openai'
-   PIPER_VOICE=lessac      # Options: amy, lessac, ryan
-   TTS_VOICE=alloy         # OpenAI voice option
    OPENAI_API_KEY=your_key_here
+   GPT_MODEL=gpt-4o
    ```
 
 2. **Enable system startup**:
@@ -111,22 +88,14 @@ Place Piper voice models in `./models/piper/`:
 5. **Edit/submit**: Manual editing supported
 
 ### System-Wide Voice Transcription
-1. **Automatic startup**: 4 services start with Windows login
+1. **Automatic startup**: 3 services start with Windows login
 2. **Voice recording**: Press `Ctrl+Alt+A` anywhere, speak, press `ESC`
 3. **Auto-paste**: Transcribed text appears at cursor location
 4. **Mouse shortcuts**:
    - Forward button: Normal transcription
    - Ctrl+Forward: GPT direct mode
    - Shift+Forward: GPT with clipboard
-   - Alt+Forward: Voice conversation mode
-   - Back button: Stop recording or abort TTS
-
-### Voice Mode (Conversational AI)
-1. **Activate**: Alt+Forward button
-2. **Speak**: Natural conversation with GPT-4o
-3. **Listen**: Response played through configured TTS voice
-4. **Continue**: Seamless back-and-forth conversation
-5. **Abort**: Back button stops long responses
+   - Back button: Stop recording
 
 ### AI Text Commands
 1. **Copy or transcribe text**
@@ -144,16 +113,14 @@ Place Piper voice models in `./models/piper/`:
 - CUDA 12.x support
 - Windows OS for system-wide hotkeys
 
-### Performance Metrics - CUDA Optimized ✅
+### Performance Metrics - CUDA Optimized
 - **Model loading**: ~2 seconds with GPU acceleration
 - **CUDA warmup**: GPU kernel pre-compilation for instant response
 - **Transcription speed**: Real-time to ultra-fast (varies by audio length)
 - **Smart corrections**: <5ms processing overhead (essentially free)
 - **Hotkey response**: 0.03 seconds
 - **Transcription quality**: Professional-grade punctuation and grammar
-- **Local TTS**: ~500ms generation time
-- **OpenAI TTS**: 2-3 seconds generation time
-- **VRAM usage**: ~1.3GB (Whisper turbo) + minimal for TTS
+- **VRAM usage**: ~1.3GB (Whisper turbo)
 - **GPU utilization**: RTX 2070 Tensor Cores (288) + 2,304 CUDA cores active
 - **RAM per service**: ~25MB each
 
@@ -183,7 +150,7 @@ segments, info = model.transcribe(
 - **Context preservation** - Maintains topic continuity across segments
 - **Enhanced readability** - Professional-grade text output
 
-## GPU Optimization Details - FULLY OPERATIONAL ✅
+## GPU Optimization Details - FULLY OPERATIONAL
 
 ### RTX 2070 CUDA Performance Confirmed
 **Status: CUDA drivers installed and working perfectly - No additional optimization needed**
@@ -218,15 +185,8 @@ segments, info = model.transcribe(
 
 ### Speed & Efficiency
 - **GPU-accelerated transcription** with turbo model optimization
-- **10x faster TTS** with local Piper vs OpenAI API
 - **Pre-loaded models** eliminate cold start delays
 - **Background architecture** ensures instant response
-
-### Enterprise Compliance
-- **IT security friendly** - No executable files for Piper TTS
-- **MIT licensed** local TTS for commercial use
-- **Standard Windows integration** - No admin rights required
-- **Privacy focused** - Local processing where possible
 
 ### User Experience
 - **System-wide availability** - Works in any application
@@ -238,14 +198,13 @@ segments, info = model.transcribe(
 ## Environment Configuration
 
 ### Required Files
-- `voice-transcription\.env` - API keys and TTS configuration
-- `./models/piper/` - Voice model storage
+- `voice-transcription\.env` - API keys configuration
 - `./models/` - Whisper model cache
 - `voice-transcription\start_service.bat` - Service launcher
 
 ### Service Management
 - **Start services**: Run `start_service.bat`
-- **Check status**: Look for 4 toast notifications on startup
+- **Check status**: Look for 3 toast notifications on startup
 - **Restart services**: `taskkill /f /im pythonw.exe` then restart
 - **Monitor performance**: Services run invisibly with minimal resource usage
 
@@ -257,7 +216,7 @@ segments, info = model.transcribe(
 - **Quality guidance prompt** - Instructs model for proper formatting
 - **Balanced performance** - Optimized for quality while maintaining speed
 
-## CUDA Installation Success ✅
+## CUDA Installation Success
 
 ### Status: Fully Operational GPU Acceleration
 - **CUDA 12.x drivers**: Successfully installed and configured
@@ -271,36 +230,19 @@ The existing codebase was already optimized for GPU acceleration. Installing CUD
 - Parallel processing across 2,304 CUDA cores and 288 Tensor Cores (2nd gen)
 - GPU-accelerated model loading and inference
 
-## Smart Corrections Implementation ✅
+## Smart Corrections Implementation
 
 ### Status: High-Performance Aho-Corasick System
 - **Processing time**: 0.0132ms per correction (3x faster than original regex)
-- **Algorithm**: Two-pass Aho-Corasick with separate automatons for corrections and @mentions
-- **Pattern efficiency**: 50 total patterns (14 corrections + 36 @mentions)
-- **Correctness**: 100% reliable correction chaining (Casey→K.C.→@K.C.)
-
-### Performance Optimization History:
-1. **Original regex**: 0.0402ms (48 separate regex operations)
-2. **Single-pass Aho-Corasick**: 0.0057ms (but broken correction chaining)
-3. **Two-pass Aho-Corasick**: 0.0132ms (correct behavior, 3x faster than regex)
+- **Algorithm**: Aho-Corasick automaton for fast pattern matching
+- **Correctness**: 100% reliable corrections
 
 ### Correction Categories:
-1. **Name corrections**: Julian→Julien, Kieran→Kieron, Marnell→Marnel
-2. **Technical terms**: bays→Bayes, ngene→NGENE
-3. **@mentions**: All 36 company names with 100% reliability
-4. **Correction chaining**: "at Casey" → "at K.C." → "@K.C." (works correctly)
-
-### Architecture:
-- **Pass 1**: Word corrections using corrections automaton
-- **Pass 2**: @mention conversions on corrected text using mentions automaton
-- **Pattern count**: 1 pattern per name (optimized from 4 variants per name)
-- **No pattern explosion**: Avoids rule-based complexity
+1. **Technical terms**: bays→Bayes, ngene→NGENE
 
 ### Usage:
 - **Automatic**: Works seamlessly with existing transcription workflow
-- **Company names**: All 36 company names reliably convert to @mentions
 - **Customizable**: Edit `voice-transcription/corrections.txt` anytime
 - **Hot-reload**: Changes apply immediately without restart
-- **Test coverage**: Comprehensive test suite with 100% pass rate
 
 This system provides a complete voice-enabled AI workflow with enterprise-grade performance, superior transcription quality, intelligent auto-corrections, and seamless Windows integration.

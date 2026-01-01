@@ -1,6 +1,6 @@
 """
 Persistent global hotkey listener for instant voice transcription.
-Runs continuously, listening for Ctrl+Alt+T to trigger recording.
+Runs continuously, listening for Ctrl+Alt+A to trigger recording.
 """
 
 import socket
@@ -41,58 +41,45 @@ except ImportError:
 class GlobalHotkeyListener:
     def __init__(self, server_port=8765, hotkey_combo=None):
         self.server_port = server_port
-        self.tts_port = 8768  # TTS service port
         self.recording = False
         self.audio_buffer = []
         self.sample_rate = 16000
         self.running = True
-        
+
         if TOASTS_AVAILABLE:
             self.toaster = WindowsToaster('Voice Transcription')
         else:
             self.toaster = None
-        
+
         self.keyboard_controller = keyboard.Controller()
-        
+
         # Use proper global hotkey registration (doesn't interfere with typing)
         self.hotkey_listener = None
         self.mouse_listener = None
-        
+
         # Pre-initialize audio system for instant response
         self.audio_stream = None
         self.service_socket = None
         self.is_initialized = False
-        
+
         # Threading controls
         self.currently_recording = False
         self.toast_queue = []
-        
-        # Recording mode tracking  
-        self.recording_mode = "normal"  # normal, gpt_direct, gpt_clipboard, voice_mode
-        
+
+        # Recording mode tracking
+        self.recording_mode = "normal"  # normal, gpt_direct, gpt_clipboard
+
         # Global keyboard listener for MetaLeft detection
         self.kbd_listener = None
-        
+
         # Pre-import everything that might be needed during recording
         self._preload_imports()
-        
+
         # Reference to self for win32 event filter
         self.listener_instance = None
-        
+
         # Voice buffer for GPT commands
         self.last_transcription = ""
-        
-        # TTS configuration - supports both local and OpenAI
-        self.tts_mode = os.getenv('TTS_MODE', 'openai')  # 'local' or 'openai'
-        
-        if self.tts_mode == 'local':
-            self.tts_port = 8769  # Local Piper TTS port
-            self.piper_voice = os.getenv('PIPER_VOICE', 'lessac')
-            print(f"🎯 Using LOCAL TTS (Piper) - Voice: {self.piper_voice}")
-        else:
-            self.tts_port = 8768  # OpenAI TTS port
-            self.tts_voice = os.getenv('TTS_VOICE', None)  # None uses service default
-            print(f"🎯 Using OpenAI TTS - Voice: {self.tts_voice or 'default'}")
         
     
     def _preload_imports(self):
@@ -118,18 +105,12 @@ class GlobalHotkeyListener:
             # data.mouseData HIWORD contains XBUTTON1 (1) or XBUTTON2 (2)
             xbutton = (data.mouseData >> 16) & 0xFFFF
             
-            if xbutton == 1:  # XBUTTON1 = Back button - STOP recording or ABORT TTS
+            if xbutton == 1:  # XBUTTON1 = Back button - STOP recording
                 if self.currently_recording:
                     # Currently recording - stop recording
                     print("🔴 Back button: Stopping recording")
                     self.recording = False
-                else:
-                    # Not recording - try to abort TTS if playing
-                    print("🔇 Back button: Attempting to abort TTS")
-                    # Run abort in separate thread to avoid blocking mouse listener
-                    abort_thread = threading.Thread(target=self.abort_tts, daemon=True)
-                    abort_thread.start()
-                
+
                 # Suppress the navigation event
                 if self.listener_instance:
                     self.listener_instance.suppress_event()
@@ -140,14 +121,10 @@ class GlobalHotkeyListener:
                 # Use GetAsyncKeyState for real-time key state (check high bit 0x8000)
                 ctrl_pressed = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0 if GetAsyncKeyState else False
                 shift_pressed = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0 if GetAsyncKeyState else False
-                alt_pressed = (GetAsyncKeyState(0x12) & 0x8000) != 0 if GetAsyncKeyState else False  # VK_MENU (Alt)
-                
-                print(f"🔍 DEBUG: Forward button - Ctrl: {ctrl_pressed}, Shift: {shift_pressed}, Alt: {alt_pressed}")
-                
-                if alt_pressed:
-                    self.recording_mode = "voice_mode"
-                    print(f"🎙️ Alt+Forward pressed - Voice Mode (speak → GPT → hear response)")
-                elif ctrl_pressed:
+
+                print(f"🔍 DEBUG: Forward button - Ctrl: {ctrl_pressed}, Shift: {shift_pressed}")
+
+                if ctrl_pressed:
                     self.recording_mode = "gpt_direct"
                     print(f"🖱️ Ctrl+Forward pressed - GPT Direct mode")
                 elif shift_pressed:
@@ -384,8 +361,6 @@ class GlobalHotkeyListener:
         # Show transcription notification for longer recordings or GPT modes
         if self.recording_mode in ["gpt_direct", "gpt_clipboard"]:
             self.show_brief_toast("✨ Transcribing and sending to GPT...")
-        elif self.recording_mode == "voice_mode":
-            self.show_brief_toast("🎙️ Voice mode - processing...")
         elif duration > 15:
             self.show_brief_toast("🔄 Transcribing...")
         
@@ -501,14 +476,14 @@ class GlobalHotkeyListener:
                     clipboard = pyperclip.paste().strip() if pyperclip.paste() else ""
                 except:
                     clipboard = ""
-                
+
                 if clipboard:
                     combined = f"{text}\n\n{clipboard}"
                     print(f"🤖 GPT Clipboard mode - Combined: '{combined[:100]}...'")
                 else:
                     combined = text
                     print(f"🤖 GPT Clipboard mode (empty clipboard) - Text only: '{text[:50]}...'")
-                
+
                 # Toast already shown during transcription for longer recordings
                 response = self.send_to_gpt(combined)
                 if response:
@@ -517,20 +492,7 @@ class GlobalHotkeyListener:
                     print(f"✅ GPT response: '{response[:50]}...'")
                 else:
                     self.show_toast("❌ GPT request failed")
-                    
-            elif self.recording_mode == "voice_mode":
-                # Voice mode - send transcription to GPT, then TTS the response
-                print(f"🎙️ Voice mode - Processing: '{text[:50]}...'")
-                self.show_brief_toast("✨ Processing voice request...")
-                response = self.send_to_gpt(text)
-                if response:
-                    print(f"🔊 Voice mode - Sending to TTS: '{response[:50]}...'")
-                    # Pass appropriate voice parameter based on TTS mode
-                    voice_param = self.tts_voice if self.tts_mode == 'openai' else None
-                    self.send_to_tts(response, voice_param)
-                else:
-                    self.show_toast("❌ Voice mode - GPT request failed")
-            
+
             # Reset to normal mode after processing
             self.recording_mode = "normal"
             
@@ -621,54 +583,7 @@ class GlobalHotkeyListener:
         finally:
             # Finished processing trigger
             self.currently_recording = False
-    
-    def handle_gpt_command(self):
-        """Handle Ctrl+Alt+Q - Send voice + clipboard to GPT."""
-        try:
-            print(f"🤖 GPT COMMAND: Processing request...")
-            
-            # Get voice buffer and clipboard
-            voice = self.last_transcription.strip() if self.last_transcription else ""
-            clipboard = ""
-            
-            try:
-                clipboard = pyperclip.paste().strip() if pyperclip.paste() else ""
-            except Exception as e:
-                print(f"⚠️ Could not read clipboard: {e}")
-            
-            # Combine inputs intelligently
-            if voice and clipboard:
-                combined_prompt = f"{voice}\n\n{clipboard}"
-                print(f"📝 Combined input: Voice + Clipboard ({len(voice)} + {len(clipboard)} chars)")
-            elif voice:
-                combined_prompt = voice
-                print(f"📝 Voice only input: ({len(voice)} chars)")
-            elif clipboard:
-                combined_prompt = clipboard
-                print(f"📝 Clipboard only input: ({len(clipboard)} chars)")
-            else:
-                self.show_toast("❌ Nothing to send to GPT")
-                print("❌ No voice transcription or clipboard content found")
-                return
-            
-            self.show_brief_toast("✨ Processing with GPT-4o...")
-            
-            # Send to GPT (placeholder - will implement service next)
-            response = self.send_to_gpt(combined_prompt)
-            
-            if response:
-                # Type GPT response directly at cursor
-                normalized_response = self.normalize_gpt_response(response)
-                self.keyboard_controller.type(normalized_response)
-                self.show_brief_toast("✅ GPT response typed!")
-                print(f"✅ GPT response typed: '{response[:50]}...'")
-            else:
-                self.show_toast("❌ GPT request failed")
-                
-        except Exception as e:
-            print(f"❌ GPT command error: {e}")
-            self.show_toast(f"❌ GPT error: {e}")
-    
+
     def send_to_gpt(self, prompt):
         """Send prompt to GPT-4o service and get response."""
         print(f"🔍 DEBUG: Attempting to send prompt to GPT service (length: {len(prompt)})")
@@ -726,131 +641,14 @@ class GlobalHotkeyListener:
             import traceback
             traceback.print_exc()
             return None
-    
-    def send_to_tts(self, text, voice=None):
-        """Send text to TTS service for speech synthesis and playback."""
-        print(f"🔊 DEBUG: Sending to {self.tts_mode.upper()} TTS (length: {len(text)})")
-        print(f"🔊 DEBUG: Text preview: '{text[:100]}...'")
-        if self.tts_mode == 'openai':
-            print(f"🔊 DEBUG: OpenAI Voice: {voice or 'default'}")
-        else:
-            print(f"🔊 DEBUG: Piper Voice: {self.piper_voice}")
-        try:
-            # Connect to appropriate TTS service
-            print(f"🔊 DEBUG: Connecting to localhost:{self.tts_port}...")
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(60)  # 60 second timeout for TTS (can take time for long text)
-            sock.connect(('localhost', self.tts_port))
-            print(f"✅ DEBUG: Connected to TTS service successfully")
-            
-            # Prepare request with optional voice parameter
-            request = {
-                'text': text
-            }
-            if voice:
-                request['voice'] = voice
-            
-            # Send request
-            request_json = json.dumps(request) + '\n'
-            print(f"🔊 DEBUG: Sending TTS request: {request_json[:200]}...")
-            sock.send(request_json.encode('utf-8'))
-            
-            # Receive response
-            response_data = b""
-            while True:
-                chunk = sock.recv(4096)
-                if not chunk:
-                    break
-                response_data += chunk
-                if response_data.endswith(b'\n'):
-                    break
-            
-            sock.close()
-            
-            if not response_data:
-                print(f"❌ DEBUG: No response data received from TTS service")
-                return False
-            
-            print(f"🔊 DEBUG: Received TTS response: {response_data[:200]}...")
-            response = json.loads(response_data.decode('utf-8').strip())
-            print(f"🔊 DEBUG: Parsed TTS response: {response}")
-            
-            if response.get('success'):
-                print(f"✅ DEBUG: TTS success - audio played")
-                return True
-            else:
-                error_msg = response.get('error', 'Unknown TTS error')
-                print(f"❌ DEBUG: TTS service error: {error_msg}")
-                self.show_toast(f"❌ TTS error: {error_msg}")
-                return False
-                
-        except Exception as e:
-            print(f"❌ DEBUG: TTS communication error: {e}")
-            self.show_toast(f"❌ TTS connection failed: {e}")
-            import traceback
-            traceback.print_exc()
-            return False
-    
-    def abort_tts(self):
-        """Send abort request to TTS service with retry logic."""
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                print(f"🔊 DEBUG: Sending TTS abort request (attempt {attempt + 1}/{max_retries})...")
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.settimeout(2)  # Shorter timeout for abort
-                sock.connect(('localhost', self.tts_port))
-                
-                # Send abort request
-                request = {'action': 'abort'}
-                request_json = json.dumps(request) + '\n'
-                sock.send(request_json.encode('utf-8'))
-                
-                # Get response with shorter timeout
-                sock.settimeout(1)  # Even shorter for response
-                response_data = b""
-                while True:
-                    chunk = sock.recv(4096)
-                    if not chunk:
-                        break
-                    response_data += chunk
-                    if response_data.endswith(b'\n'):
-                        break
-                
-                sock.close()
-                
-                if response_data:
-                    response = json.loads(response_data.decode('utf-8').strip())
-                    if response.get('success'):
-                        print(f"✅ DEBUG: TTS aborted successfully on attempt {attempt + 1}")
-                        self.show_brief_toast("🔇 Voice response stopped")
-                        return True
-                    else:
-                        print(f"⚠️ DEBUG: TTS abort returned false on attempt {attempt + 1}")
-                
-            except socket.timeout:
-                print(f"⏰ DEBUG: TTS abort timeout on attempt {attempt + 1}")
-                if attempt < max_retries - 1:
-                    time.sleep(0.1)  # Brief pause before retry
-                continue
-            except Exception as e:
-                print(f"❌ DEBUG: TTS abort error on attempt {attempt + 1}: {e}")
-                if attempt < max_retries - 1:
-                    time.sleep(0.1)  # Brief pause before retry
-                continue
-        
-        print(f"❌ DEBUG: TTS abort failed after {max_retries} attempts")
-        self.show_brief_toast("⚠️ Could not stop voice response")
-        return False
-    
+
     def start_listening(self):
         """Start the global hotkey listener."""
         print("🚀 Starting voice transcription system...")
         print("🎯 Forward button - Normal recording (types at cursor)")
         print("🤖 Ctrl+Forward button - GPT direct (transcription only)")
         print("📋 Shift+Forward button - GPT with clipboard (transcription + clipboard)")
-        print("🎙️ Alt+Forward button - Voice mode (speak → GPT → hear response)")
-        print("⏹️ Back button or Escape - Stop recording or abort voice playback")
+        print("⏹️ Back button or Escape - Stop recording")
         print("🛑 Press Ctrl+C to stop listener")
         
         # Wait for service to be ready
