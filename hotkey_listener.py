@@ -448,28 +448,52 @@ class GlobalHotkeyListener:
         
         return result.strip()
 
+    def paste_via_clipboard(self, text):
+        """Paste text via clipboard (Ctrl+V) instead of typing character-by-character.
+
+        This prevents React-based terminal UIs (like Claude Code CLI) from hitting
+        maximum update depth errors caused by rapid individual character inputs.
+        """
+        try:
+            # Save current clipboard content
+            original_clipboard = pyperclip.paste()
+        except:
+            original_clipboard = None
+
+        try:
+            # Copy text to clipboard and paste immediately
+            pyperclip.copy(text)
+            with self.keyboard_controller.pressed(Key.ctrl):
+                self.keyboard_controller.tap('v')
+
+        finally:
+            # Restore original clipboard after paste completes
+            if original_clipboard is not None:
+                time.sleep(0.05)  # Brief wait for paste to complete before restoring
+                pyperclip.copy(original_clipboard)
+
     def paste_text(self, text):
         """Handle text output based on recording mode."""
         try:
             # Store in voice buffer
             self.last_transcription = text
-            
+
             if self.recording_mode == "normal":
-                # Normal mode - just type the transcription
-                self.keyboard_controller.type(text)
-                print(f"✅ Normal mode - Typed: '{text[:50]}...'")
-                
+                # Normal mode - paste transcription via clipboard (prevents React update loops)
+                self.paste_via_clipboard(text)
+                print(f"✅ Normal mode - Pasted: '{text[:50]}...'")
+
             elif self.recording_mode == "gpt_direct":
                 # GPT direct mode - send only transcription to GPT
                 print(f"🤖 GPT Direct mode - Sending: '{text[:50]}...'")
                 response = self.send_to_gpt(text)
                 if response:
                     normalized_response = self.normalize_gpt_response(response)
-                    self.keyboard_controller.type(normalized_response)
+                    self.paste_via_clipboard(normalized_response)
                     print(f"✅ GPT response: '{response[:50]}...'")
                 else:
                     self.show_toast("❌ GPT request failed")
-                    
+
             elif self.recording_mode == "gpt_clipboard":
                 # GPT with clipboard mode - combine with clipboard and send to GPT
                 try:
@@ -488,7 +512,7 @@ class GlobalHotkeyListener:
                 response = self.send_to_gpt(combined)
                 if response:
                     normalized_response = self.normalize_gpt_response(response)
-                    self.keyboard_controller.type(normalized_response)
+                    self.paste_via_clipboard(normalized_response)
                     print(f"✅ GPT response: '{response[:50]}...'")
                 else:
                     self.show_toast("❌ GPT request failed")
