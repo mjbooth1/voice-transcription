@@ -230,6 +230,31 @@ The existing codebase was already optimized for GPU acceleration. Installing CUD
 - Parallel processing across 2,304 CUDA cores and 288 Tensor Cores (2nd gen)
 - GPU-accelerated model loading and inference
 
+## Clipboard Paste Mechanism
+
+### Why Clipboard Paste Instead of Typing
+The hotkey listener uses clipboard paste (Ctrl+V) instead of character-by-character typing to insert transcribed text. This prevents React-based terminal UIs (like Claude Code CLI) from hitting maximum update depth errors caused by rapid individual character inputs.
+
+**Character-by-character typing** fires keypress events as fast as the system allows (~0-1ms apart), which can overwhelm React's render cycle and trigger error #185 (maximum update depth exceeded).
+
+**Clipboard paste** inserts all text as a single operation, triggering just one state update regardless of text length.
+
+### Clipboard Preservation
+The system preserves your original clipboard content:
+
+1. Save current clipboard content
+2. Copy transcription to clipboard
+3. Paste via Ctrl+V (text appears immediately)
+4. Wait 50ms for paste to complete
+5. Restore original clipboard content
+
+The 50ms delay occurs **after** text appears on screen, so it doesn't affect perceived latency. Your clipboard returns to its previous state, which is essential for the GPT+clipboard workflow (Shift+Forward) where you reference copied content.
+
+### Implementation Details
+- **Pre-paste delay**: None (immediate paste after clipboard copy)
+- **Post-paste delay**: 50ms (ensures paste completes before clipboard restoration)
+- **Clipboard types**: Text only (images/files on clipboard will be lost)
+
 ## Smart Corrections Implementation
 
 ### Status: High-Performance Aho-Corasick System
