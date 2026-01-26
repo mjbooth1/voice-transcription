@@ -1,6 +1,7 @@
 """
-Simple GPT-4o API service for voice transcription commands.
-Listens on port 8767 and processes prompts using OpenAI's GPT-4o.
+Simple GPT API service for voice transcription commands.
+Listens on port 8767 and processes prompts using OpenAI GPT.
+Model configured via GPT_MODEL in .env (default: gpt-5.2).
 """
 
 import socket
@@ -40,16 +41,19 @@ class GPTService:
         try:
             # Load environment variables from .env file
             load_dotenv()
-            
+
             # Get API key from environment variable
             api_key = os.getenv('OPENAI_API_KEY')
             if not api_key:
                 print("[X] OPENAI_API_KEY environment variable not found")
                 print("Please set your OpenAI API key in .env file or environment variables")
                 return False
-            
+
+            # Get model from environment variable (default to gpt-5.2)
+            self.model = os.getenv('GPT_MODEL', 'gpt-5.2')
+
             self.client = OpenAI(api_key=api_key)
-            print("[OK] OpenAI client initialized successfully")
+            print(f"[OK] OpenAI client initialized with model: {self.model}")
             return True
             
         except Exception as e:
@@ -70,15 +74,15 @@ class GPTService:
             print(f"Toast notification failed: {e}")
     
     def process_gpt_request(self, prompt):
-        """Send prompt to GPT-4o and get response."""
+        """Send prompt to GPT and get response."""
         if not self.client:
             return None, "OpenAI client not initialized"
-        
+
         try:
-            print(f"[GPT] Sending prompt to GPT-4o: '{prompt[:100]}...'")
-            
+            print(f"[GPT] Sending prompt to {self.model}: '{prompt[:100]}...'")
+
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model=self.model,
                 messages=[
                     {
                         "role": "system", 
@@ -94,11 +98,11 @@ class GPTService:
             )
             
             result = response.choices[0].message.content.strip()
-            print(f"[OK] GPT-4o response: '{result[:100]}...'")
+            print(f"[OK] GPT response: '{result[:100]}...'")
             return result, None
-            
+
         except Exception as e:
-            error_msg = f"GPT-4o request failed: {e}"
+            error_msg = f"GPT request failed: {e}"
             print(f"[ERROR] {error_msg}")
             return None, error_msg
     
@@ -134,7 +138,7 @@ class GPTService:
                 if not prompt:
                     response = {'success': False, 'error': 'No prompt provided'}
                 else:
-                    # Process with GPT-4o
+                    # Process with GPT
                     gpt_response, error = self.process_gpt_request(prompt)
                     
                     if gpt_response:
@@ -169,7 +173,7 @@ class GPTService:
             server_socket.listen(5)
             
             print(f"[START] GPT Service started on port {self.port}")
-            print("[READY] Ready to process GPT-4o requests")
+            print(f"[READY] Ready to process {self.model} requests")
             self.show_toast("✨ GPT Service Ready")
             
             while self.running:
