@@ -8,7 +8,8 @@
       "Bash(xargs ls:*)",
       "Bash(cat:*)",
       "Bash(wc:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(python3:*)"
     ]
   }
 }

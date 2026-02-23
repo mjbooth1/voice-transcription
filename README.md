@@ -6,11 +6,15 @@ Transform your voice to text anywhere on your computer with GPU-accelerated Whis
 
 ### 1. Install Dependencies
 ```bash
-# Activate your existing environment
-.\venv312\Scripts\activate
+# Create and activate virtual environment
+python -m venv venv
+.\venv\Scripts\activate
 
-# Install the additional packages needed
-pip install -r requirements_additional.txt
+# Install dependencies
+pip install -r requirements.txt
+
+# For GPU acceleration (recommended):
+pip install torch --index-url https://download.pytorch.org/whl/cu121
 ```
 
 ### 2. Configure API Key
@@ -68,7 +72,6 @@ Three background services run continuously:
 - `.env` - API keys and settings
 - `corrections.txt` - Custom transcription corrections
 - `requirements.txt` - Python dependencies
-- `requirements_additional.txt` - Additional system dependencies
 
 ### Utilities
 - `start_service.bat` - Launch all services

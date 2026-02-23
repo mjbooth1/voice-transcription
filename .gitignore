@@ -170,7 +170,7 @@ cython_debug/
 # Ruff stuff:
 .ruff_cache/
 
-# Model files (Whisper, Piper TTS)
+# Model files (Whisper)
 models/
 
 # Runtime audio files

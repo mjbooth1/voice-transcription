@@ -4,7 +4,6 @@ Helps identify which Windows message codes correspond to specific mouse buttons.
 Run this script and click various buttons to see their message codes.
 """
 
-import time
 from pynput.mouse import Listener as MouseListener
 
 def on_click(x, y, button, pressed):
@@ -66,7 +65,7 @@ def main():
         try:
             listener.join()
         except KeyboardInterrupt:
-            print("\\nDetection stopped.")
+            print("\nDetection stopped.")
 
 if __name__ == "__main__":
     main()

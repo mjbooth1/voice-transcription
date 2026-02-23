@@ -18,7 +18,6 @@ echo Starting Voice Transcription and GPT Service...
 echo Loading Whisper turbo model and GPT connection (this may take 10-15 seconds)...
 
 REM Start the transcription service invisibly
-cd /d "%SCRIPT_DIR%"
 start "Voice Service" pythonw transcription_service.py
 
 REM Wait a moment for service to initialize
