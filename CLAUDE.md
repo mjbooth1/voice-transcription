@@ -11,7 +11,7 @@ A system-wide voice transcription tool featuring GPU-accelerated Whisper transcr
 - **Smart corrections system** - Auto-fixes common misspellings and technical terms
 - **Quality-focused transcription** - Superior punctuation, capitalization, and sentence structure
 - **System-wide hotkeys** - Works in any Windows application (Ctrl+Alt+A)
-- **Real-time recording** - Live voice activity visualization and instant feedback
+- **Real-time recording** - Toast notifications and instant feedback
 - **Background services** - Pre-loaded models for 0.03 second response time
 - **Tensor Core acceleration** - GPU Tensor Cores fully utilized with float16 compute type
 
@@ -185,6 +185,12 @@ segments, info = model.transcribe(
 - **Improved sentence boundaries** - Enabled timestamps for natural breaks
 - **Quality guidance prompt** - Instructs model for proper formatting
 - **Balanced performance** - Optimized for quality while maintaining speed
+
+### Final Code Cleanup (2026-02-23)
+- **Crash bug fixed** - `handle_hotkey_trigger()` called non-existent `record_audio()`; now correctly calls `record_audio_fast()` in all paths
+- **Dead code removed** - Removed `win32_keyboard_filter()`, `on_global_key_press()`, and `_preload_imports()` (all were no-ops/never called)
+- **Stale variable removed** - `self.kbd_listener` was set but never read
+- **Escape sequence fixed** - `button_detector.py` was printing literal `\n` instead of a newline
 
 ## CUDA Installation Success
 
