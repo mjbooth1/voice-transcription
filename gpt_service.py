@@ -1,7 +1,7 @@
 """
 Simple GPT API service for voice transcription commands.
 Listens on port 8767 and processes prompts using OpenAI GPT.
-Model configured via GPT_MODEL in .env (default: gpt-4o).
+Model configured via GPT_MODEL in .env (default: gpt-5.5).
 """
 
 import socket
@@ -43,8 +43,10 @@ class GPTService:
             if not api_key:
                 return False
 
-            # Get model from environment variable (default to gpt-4o)
-            self.model = os.getenv('GPT_MODEL', 'gpt-4o')
+            # Get model settings from environment variables.
+            self.model = os.getenv('GPT_MODEL', 'gpt-5.5')
+            self.reasoning_effort = os.getenv('GPT_REASONING_EFFORT', 'low')
+            self.max_output_tokens = int(os.getenv('GPT_MAX_OUTPUT_TOKENS', '2000'))
 
             self.client = OpenAI(api_key=api_key)
             return True
@@ -82,8 +84,8 @@ class GPTService:
                         "content": prompt
                     }
                 ],
-                max_tokens=1000,
-                temperature=0.7
+                max_completion_tokens=self.max_output_tokens,
+                reasoning_effort=self.reasoning_effort
             )
 
             result = response.choices[0].message.content.strip()

@@ -379,8 +379,8 @@ class GlobalHotkeyListener:
     def paste_via_clipboard(self, text):
         """Paste text via clipboard (Ctrl+V) instead of typing character-by-character.
 
-        This prevents React-based terminal UIs (like Claude Code CLI) from hitting
-        maximum update depth errors caused by rapid individual character inputs.
+        This prevents React-based terminal UIs from hitting maximum update depth
+        errors caused by rapid individual character inputs.
         """
         try:
             # Save current clipboard content
@@ -499,7 +499,7 @@ class GlobalHotkeyListener:
             self.currently_recording = False
 
     def send_to_gpt(self, prompt):
-        """Send prompt to GPT-4o service and get response."""
+        """Send prompt to GPT service and get response."""
         try:
             # Connect to GPT service (port 8767 to avoid conflicts)
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

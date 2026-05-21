@@ -29,7 +29,9 @@ Edit `.env` and set:
 
 ```env
 OPENAI_API_KEY=your_key_here
-GPT_MODEL=gpt-4o
+GPT_MODEL=gpt-5.5
+GPT_REASONING_EFFORT=low
+GPT_MAX_OUTPUT_TOKENS=2000
 ```
 
 ### 3. Start the System
@@ -53,8 +55,8 @@ The first run may take longer while Whisper downloads/warms the local model cach
 | Button | Action |
 |--------|--------|
 | **Forward** | Record -> Transcribe -> Paste at cursor |
-| **Ctrl+Forward** | Record -> Send to GPT-4o -> Paste response |
-| **Shift+Forward** | Record + Clipboard -> Send to GPT-4o -> Paste response |
+| **Ctrl+Forward** | Record -> Send to GPT-5.5 -> Paste response |
+| **Shift+Forward** | Record + Clipboard -> Send to GPT-5.5 -> Paste response |
 | **Back** or **ESC** | Stop recording |
 
 ### Keyboard Shortcut
@@ -68,7 +70,7 @@ Three background services run continuously:
 | Service | Port | Purpose |
 |---------|------|---------|
 | `transcription_service.py` | 8765 | GPU-accelerated Whisper transcription |
-| `gpt_service.py` | 8767 | GPT-4o text processing |
+| `gpt_service.py` | 8767 | GPT-5.5 text processing |
 | `hotkey_listener.py` | - | Global mouse/keyboard listener |
 
 ## Files
@@ -76,7 +78,7 @@ Three background services run continuously:
 ### Core Services
 
 - `transcription_service.py` - Whisper model management.
-- `gpt_service.py` - GPT-4o API integration.
+- `gpt_service.py` - GPT-5.5 API integration.
 - `hotkey_listener.py` - Global hotkey and mouse button listener.
 
 ### Configuration
@@ -96,6 +98,7 @@ Three background services run continuously:
 - `venv/`, `.env`, `models/`, runtime audio, and Python caches are ignored by Git.
 - Whisper model files should be downloaded locally on each machine, not committed.
 - Install current NVIDIA drivers and CUDA-compatible PyTorch on machines where GPU acceleration is needed.
+- The GPT service uses Chat Completions for compatibility with work networks that block the Responses API endpoint.
 
 ## Troubleshooting
 
@@ -118,6 +121,6 @@ Three background services run continuously:
 
 ## Security
 
-- All transcription is local except GPT-4o processing.
+- All transcription is local except GPT-5.5 processing.
 - OpenAI credentials live in `.env`, which is ignored by Git.
 - Socket communication is local-only.

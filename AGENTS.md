@@ -1,7 +1,7 @@
-# Codex IDE
+# Agent Instructions
 
 ## Project Overview
-A system-wide voice transcription tool featuring GPU-accelerated Whisper transcription and GPT-4o integration. The system provides real-time voice transcription and intelligent text processing through a combination of local and cloud-based AI services.
+A system-wide voice transcription tool featuring GPU-accelerated Whisper transcription and GPT-5.5 integration. The system provides real-time voice transcription and intelligent text processing through a combination of local and cloud-based AI services.
 
 ## Core Features
 
@@ -16,7 +16,7 @@ A system-wide voice transcription tool featuring GPU-accelerated Whisper transcr
 - **Tensor Core acceleration** - GPU Tensor Cores fully utilized with float16 compute type
 
 ### AI Command Processing
-- **3 specialized GPT-4o modes** - Direct transcription, GPT processing, clipboard integration
+- **3 specialized GPT-5.5 modes** - Direct transcription, GPT processing, clipboard integration
 - **Context-aware processing** - Clipboard integration and cursor-based text insertion
 - **Text normalization** - Automatically cleans GPT formatting for plain text applications
 
@@ -39,7 +39,7 @@ A system-wide voice transcription tool featuring GPU-accelerated Whisper transcr
 - **PyTorch** with full GPU acceleration
 - **faster-whisper** with turbo model + float16 Tensor Core optimization
 - **CTranslate2** with CUDA support for neural network inference
-- **OpenAI API** for GPT-4o
+- **OpenAI API** for GPT-5.5
 
 ## Installation & Setup
 
@@ -60,7 +60,9 @@ pip install torch --index-url https://download.pytorch.org/whl/cu121
 1. **Configure API key**: Edit `.env`
    ```env
    OPENAI_API_KEY=your_key_here
-   GPT_MODEL=gpt-4o
+   GPT_MODEL=gpt-5.5
+   GPT_REASONING_EFFORT=low
+   GPT_MAX_OUTPUT_TOKENS=2000
    ```
 
 2. **Enable system startup**:
@@ -208,7 +210,7 @@ The existing codebase was optimized for GPU acceleration. Installing CUDA driver
 ## Clipboard Paste Mechanism
 
 ### Why Clipboard Paste Instead of Typing
-The hotkey listener uses clipboard paste (Ctrl+V) instead of character-by-character typing to insert transcribed text. This prevents React-based terminal UIs (like Codex CLI) from hitting maximum update depth errors caused by rapid individual character inputs.
+The hotkey listener uses clipboard paste (Ctrl+V) instead of character-by-character typing to insert transcribed text. This prevents React-based terminal UIs from hitting maximum update depth errors caused by rapid individual character inputs.
 
 **Character-by-character typing** fires keypress events as fast as the system allows (~0-1ms apart), which can overwhelm React's render cycle and trigger error #185 (maximum update depth exceeded).
 
