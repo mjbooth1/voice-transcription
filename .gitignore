@@ -136,6 +136,9 @@ ENV/
 env.bak/
 venv.bak/
 
+# Local assistant/editor settings
+.claude/
+
 # Spyder project settings
 .spyderproject
 .spyproject
@@ -172,6 +175,12 @@ cython_debug/
 
 # Model files (Whisper)
 models/
+*.bin
+*.safetensors
+*.pt
+*.pth
+*.onnx
+*.gguf
 
 # Runtime audio files
 temp_audio/
