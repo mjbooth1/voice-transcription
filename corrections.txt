@@ -8,6 +8,8 @@ bays:Bayes
 ngene:NGENE
 nGene: NGENE
 nGine: NGENE
+MISTI: Misty
+
 
 
 # === INSTRUCTIONS ===
