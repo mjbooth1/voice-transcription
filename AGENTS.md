@@ -1,7 +1,7 @@
 # Agent Instructions
 
 ## Project Overview
-A system-wide voice transcription tool featuring GPU-accelerated Whisper transcription and GPT-5.5 integration. The system provides real-time voice transcription and intelligent text processing through a combination of local and cloud-based AI services.
+A system-wide voice transcription tool featuring GPU-accelerated Whisper transcription and GPT-6 Sol integration. The system provides real-time voice transcription and intelligent text processing through a combination of local and cloud-based AI services.
 
 ## Core Features
 
@@ -11,12 +11,12 @@ A system-wide voice transcription tool featuring GPU-accelerated Whisper transcr
 - **Smart corrections system** - Auto-fixes common misspellings and technical terms
 - **Quality-focused transcription** - Superior punctuation, capitalization, and sentence structure
 - **System-wide hotkeys** - Works in any Windows application (Ctrl+Alt+A)
-- **Real-time recording** - Toast notifications and instant feedback
+- **Real-time recording** - Persistent tray microphone with instant state feedback
 - **Background services** - Pre-loaded models for 0.03 second response time
 - **Tensor Core acceleration** - GPU Tensor Cores fully utilized with float16 compute type
 
 ### AI Command Processing
-- **3 specialized GPT-5.5 modes** - Direct transcription, GPT processing, clipboard integration
+- **3 specialized GPT-6 Sol modes** - Direct GPT processing, clipboard integration, and academic/scientific revision
 - **Context-aware processing** - Clipboard integration and cursor-based text insertion
 - **Text normalization** - Automatically cleans GPT formatting for plain text applications
 
@@ -32,14 +32,14 @@ A system-wide voice transcription tool featuring GPU-accelerated Whisper transcr
 - **Background Services** - 3 independent services for system-wide functionality:
   - Transcription service (Whisper model management)
   - GPT service (AI command processing)
-  - Hotkey listener (mouse/keyboard integration)
+  - Hotkey listener (mouse/keyboard integration and tray-icon ownership)
 
 ### Technical Stack
 - **Python 3.12** with CUDA 12.x drivers
 - **PyTorch** with full GPU acceleration
 - **faster-whisper** with turbo model + float16 Tensor Core optimization
 - **CTranslate2** with CUDA support for neural network inference
-- **OpenAI API** for GPT-5.5
+- **OpenAI API** for GPT-6 Sol
 
 ## Installation & Setup
 
@@ -60,8 +60,8 @@ pip install torch --index-url https://download.pytorch.org/whl/cu121
 1. **Configure API key**: Edit `.env`
    ```env
    OPENAI_API_KEY=your_key_here
-   GPT_MODEL=gpt-5.5
-   GPT_REASONING_EFFORT=low
+   GPT_MODEL=gpt-6-sol
+   GPT_REASONING_EFFORT=none
    GPT_MAX_OUTPUT_TOKENS=2000
    ```
 
@@ -70,13 +70,49 @@ pip install torch --index-url https://download.pytorch.org/whl/cu121
    - Copy `start_service.bat` to startup folder
    - Restart Windows for auto-start
 
+### System-Tray Status Indicator
+
+`hotkey_listener.py` owns one persistent, menu-less microphone icon in the
+Windows notification area. `tray_indicator.py` renders an upright white studio
+microphone based on the supplied reference, places it on a large circular status
+background with Pillow, and publishes updates through pystray. The old long
+handheld `Microphone.ico` is intentionally not used. The Whisper and GPT services
+remain headless.
+
+The listener reserves localhost port 8768 for its lifetime as a single-instance
+lock. Starting the batch file again cannot create a duplicate tray icon.
+
+| Indicator | Meaning |
+|-----------|---------|
+| Gray background | Ready |
+| Green background | Recording, for every route |
+| Red background | Stopping capture and assembling audio |
+| Blue background | Whisper transcription in progress |
+| Orange background | General GPT call from Ctrl+Forward or Shift+Forward |
+| Purple background | Academic/scientific GPT call |
+| Small red badge | Problem; hover text contains the error |
+
+The full red background is a normal transient stopping state. A small red badge
+is the separate failure signal and may overlay any microphone color. Successful
+work returns the icon to gray; service-health errors clear when the service
+recovers, and workflow errors clear after a successful workflow.
+
+The tray icon has no click behavior or context menu. Use `stop_service.bat` for
+shutdown. Windows may initially place it in the notification-area overflow;
+Windows owns pinning and the application cannot force placement beside the clock.
+
+The former `windows-toasts` imports, initialization, and display methods are
+retained only as commented legacy reference blocks in all three services. They
+must remain non-executable unless a future task explicitly restores toast UX.
+
 ## Usage Workflows
 
 ### System-Wide Voice Transcription
 1. **Automatic startup**: 3 services start with Windows login
 2. **Voice recording**: Press `Ctrl+Alt+A` anywhere, speak, press `ESC`
 3. **Auto-paste**: Transcribed text appears at cursor location
-4. **Mouse shortcuts**:
+4. **Status feedback**: Hover over the tray microphone for the current phase or error
+5. **Mouse shortcuts**:
    - Forward button: Normal transcription
    - Ctrl+Forward: GPT direct mode
    - Shift+Forward: GPT with clipboard
@@ -176,13 +212,16 @@ segments, info = model.transcribe(
 
 ### Service Management
 - **Start services**: Run `start_service.bat`
-- **Check status**: Look for 3 toast notifications on startup
+- **Check status**: Look for the tray microphone and hover for status/error details
 - **Restart services**: `taskkill /f /im pythonw.exe` then restart
 - **Monitor performance**: Services run invisibly with minimal resource usage
 
 ## Quality Improvements
 
 ### Recent Updates
+- **Tray microphone status** - Replaced active toast banners with a persistent,
+  color-coded microphone and red problem badge
+- **Legacy toasts disabled** - Toast code is retained only in commented reference blocks
 - **Enhanced context processing** - `condition_on_previous_text=True` for better flow
 - **Improved sentence boundaries** - Enabled timestamps for natural breaks
 - **Quality guidance prompt** - Instructs model for proper formatting

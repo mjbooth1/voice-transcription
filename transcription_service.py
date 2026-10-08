@@ -15,11 +15,14 @@ from faster_whisper import WhisperModel
 import time
 import signal
 import ahocorasick
-try:
-    from windows_toasts import WindowsToaster, Toast
-    TOASTS_AVAILABLE = True
-except ImportError:
-    TOASTS_AVAILABLE = False
+
+# Legacy toast backend intentionally disabled. User-visible status now belongs
+# exclusively to the microphone icon in hotkey_listener.py.
+# try:
+#     from windows_toasts import WindowsToaster, Toast
+#     TOASTS_AVAILABLE = True
+# except ImportError:
+#     TOASTS_AVAILABLE = False
 
 class TranscriptionService:
     def __init__(self, port=8765):
@@ -28,10 +31,11 @@ class TranscriptionService:
         self.device_used = None
         self.model_size = "turbo"
         self.running = True
-        if TOASTS_AVAILABLE:
-            self.toaster = WindowsToaster('Voice Transcription')
-        else:
-            self.toaster = None
+        # Legacy toast initialization intentionally disabled.
+        # if TOASTS_AVAILABLE:
+        #     self.toaster = WindowsToaster('Voice Transcription')
+        # else:
+        #     self.toaster = None
 
         # Initialize corrections
         self.corrections_automaton = None
@@ -61,7 +65,7 @@ class TranscriptionService:
 
                 # Warm up CUDA kernels for faster first transcription
                 self._warmup_cuda_kernels()
-                self.show_toast("🎯 GPU turbo transcription ready!")
+                # Legacy ready toast disabled; the tray listener probes this port.
 
             except Exception:
                 # Fallback to CPU
@@ -74,11 +78,10 @@ class TranscriptionService:
                     download_root=self.models_path
                 )
                 self.device_used = "CPU"
-                self.show_toast("✅ CPU turbo transcription ready!")
+                # Legacy ready toast disabled; the tray listener probes this port.
 
         except Exception as e:
             error_msg = f"❌ Failed to load model: {e}"
-            self.show_toast(error_msg)
             raise RuntimeError(error_msg)
 
     def _warmup_cuda_kernels(self):
@@ -120,16 +123,13 @@ class TranscriptionService:
         except Exception:
             pass  # Non-critical warmup failure
 
-    def show_toast(self, message):
-        """Show Windows toast notification."""
-        if not TOASTS_AVAILABLE or not self.toaster:
-            return
-        try:
-            toast = Toast()
-            toast.text_fields = [message]
-            self.toaster.show_toast(toast)
-        except Exception:
-            pass
+    # Legacy toast method intentionally disabled and retained for reference.
+    # def show_toast(self, message):
+    #     if not TOASTS_AVAILABLE or not self.toaster:
+    #         return
+    #     toast = Toast()
+    #     toast.text_fields = [message]
+    #     self.toaster.show_toast(toast)
 
     def transcribe_audio_data(self, audio_data, sample_rate=16000):
         """Transcribe audio data using the loaded model."""
@@ -362,15 +362,15 @@ class TranscriptionService:
                     if self.running:
                         pass
 
-        except Exception as e:
-            self.show_toast(f"❌ Service failed to start: {e}")
+        except Exception:
+            # The listener detects the unavailable port and shows a red badge.
+            pass
         finally:
             server_socket.close()
 
     def stop(self):
         """Stop the service."""
         self.running = False
-        self.show_toast("🛑 Voice transcription service stopped")
 
 
 def signal_handler(signum, frame):

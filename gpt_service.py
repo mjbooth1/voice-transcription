@@ -1,7 +1,7 @@
 """
 Simple GPT API service for voice transcription commands.
 Listens on port 8767 and processes prompts using OpenAI GPT.
-Model configured via GPT_MODEL in .env (default: gpt-5.5).
+Model configured via GPT_MODEL in .env (default: gpt-6-sol).
 """
 
 import socket
@@ -11,12 +11,17 @@ import sys
 import os
 from openai import OpenAI
 from dotenv import load_dotenv
+from academic_scientific import load_academic_scientific_prompt
 
-try:
-    from windows_toasts import WindowsToaster, Toast
-    TOASTS_AVAILABLE = True
-except ImportError:
-    TOASTS_AVAILABLE = False
+GENERAL_SYSTEM_PROMPT = "You are a helpful assistant. Provide clear, concise responses to user requests."
+
+# Legacy toast backend intentionally disabled. User-visible status now belongs
+# exclusively to the microphone icon in hotkey_listener.py.
+# try:
+#     from windows_toasts import WindowsToaster, Toast
+#     TOASTS_AVAILABLE = True
+# except ImportError:
+#     TOASTS_AVAILABLE = False
 
 class GPTService:
     def __init__(self, port=8767):
@@ -24,10 +29,11 @@ class GPTService:
         self.running = True
         self.client = None
 
-        if TOASTS_AVAILABLE:
-            self.toaster = WindowsToaster('GPT Service')
-        else:
-            self.toaster = None
+        # Legacy toast initialization intentionally disabled.
+        # if TOASTS_AVAILABLE:
+        #     self.toaster = WindowsToaster('GPT Service')
+        # else:
+        #     self.toaster = None
 
         # Initialize OpenAI client
         self.initialize_openai()
@@ -44,8 +50,8 @@ class GPTService:
                 return False
 
             # Get model settings from environment variables.
-            self.model = os.getenv('GPT_MODEL', 'gpt-5.5')
-            self.reasoning_effort = os.getenv('GPT_REASONING_EFFORT', 'low')
+            self.model = os.getenv('GPT_MODEL', 'gpt-6-sol')
+            self.reasoning_effort = os.getenv('GPT_REASONING_EFFORT', 'none')
             self.max_output_tokens = int(os.getenv('GPT_MAX_OUTPUT_TOKENS', '2000'))
 
             self.client = OpenAI(api_key=api_key)
@@ -54,30 +60,31 @@ class GPTService:
         except Exception:
             return False
 
-    def show_toast(self, message):
-        """Show Windows toast notification."""
-        if not TOASTS_AVAILABLE or not self.toaster:
-            return
+    # Legacy toast method intentionally disabled and retained for reference.
+    # def show_toast(self, message):
+    #     if not TOASTS_AVAILABLE or not self.toaster:
+    #         return
+    #     toast = Toast()
+    #     toast.text_fields = [message]
+    #     self.toaster.show_toast(toast)
 
-        try:
-            toast = Toast()
-            toast.text_fields = [message]
-            self.toaster.show_toast(toast)
-        except Exception:
-            pass
-
-    def process_gpt_request(self, prompt):
+    def process_gpt_request(self, prompt, mode="general"):
         """Send prompt to GPT and get response."""
         if not self.client:
             return None, "OpenAI client not initialized"
 
         try:
+            system_prompt = (
+                load_academic_scientific_prompt()
+                if mode == "academic_scientific"
+                else GENERAL_SYSTEM_PROMPT
+            )
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a helpful assistant. Provide clear, concise responses to user requests."
+                        "content": system_prompt
                     },
                     {
                         "role": "user",
@@ -121,11 +128,12 @@ class GPTService:
 
             if action == 'gpt_query':
                 prompt = request.get('prompt', '')
+                mode = request.get('mode', 'general')
                 if not prompt:
                     response = {'success': False, 'error': 'No prompt provided'}
                 else:
                     # Process with GPT
-                    gpt_response, error = self.process_gpt_request(prompt)
+                    gpt_response, error = self.process_gpt_request(prompt, mode=mode)
 
                     if gpt_response:
                         response = {'success': True, 'response': gpt_response}
@@ -155,7 +163,7 @@ class GPTService:
             server_socket.bind(('localhost', self.port))
             server_socket.listen(5)
 
-            self.show_toast("✨ GPT Service Ready")
+            # Legacy ready toast disabled; the tray listener probes this port.
 
             while self.running:
                 try:

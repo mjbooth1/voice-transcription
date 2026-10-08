@@ -15,5 +15,9 @@ python-dotenv>=1.0.0
 pynput>=1.7.6
 pyperclip>=1.8.2
 
-# Windows notifications
-windows-toasts>=1.1.0
+# Persistent Windows system-tray status icon
+pystray>=0.19.5
+Pillow>=10.0.0
+
+# Legacy Windows toast backend (intentionally disabled; retained for reference)
+# windows-toasts>=1.1.0

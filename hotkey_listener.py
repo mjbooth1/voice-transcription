@@ -16,6 +16,7 @@ from pynput import keyboard, mouse
 from pynput.keyboard import Key, Listener as KeyboardListener, GlobalHotKeys
 from pynput.mouse import Button, Listener as MouseListener
 import signal
+from tray_indicator import TrayIndicator, TrayState
 
 # Windows API for checking modifier keys
 try:
@@ -25,29 +26,54 @@ try:
     VK_SHIFT = 0x10
     GetKeyState = user32.GetKeyState
     GetAsyncKeyState = user32.GetAsyncKeyState
-except ImportError:
+    GetDoubleClickTime = user32.GetDoubleClickTime
+except (ImportError, AttributeError):
     GetKeyState = None
     GetAsyncKeyState = None
+    GetDoubleClickTime = None
     VK_CONTROL = VK_SHIFT = 0
 
-try:
-    from windows_toasts import WindowsToaster, Toast
-    TOASTS_AVAILABLE = True
-except ImportError:
-    TOASTS_AVAILABLE = False
+# Legacy toast backend intentionally disabled in favor of the persistent tray icon.
+# Kept here as a migration reference only; this code must not be executable.
+# try:
+#     from windows_toasts import WindowsToaster, Toast
+#     TOASTS_AVAILABLE = True
+# except ImportError:
+#     TOASTS_AVAILABLE = False
+
+
+def get_double_forward_window_seconds():
+    """Return the Windows double-click interval, capped at 500 ms."""
+    try:
+        interval_ms = int(GetDoubleClickTime()) if GetDoubleClickTime else 500
+    except Exception:
+        interval_ms = 500
+
+    if interval_ms <= 0:
+        interval_ms = 500
+
+    return min(interval_ms, 500) / 1000.0
+
 
 class GlobalHotkeyListener:
-    def __init__(self, server_port=8765, hotkey_combo=None):
+    def __init__(self, server_port=8765, hotkey_combo=None, tray_indicator=None):
         self.server_port = server_port
         self.recording = False
         self.audio_buffer = []
         self.sample_rate = 16000
         self.running = True
 
-        if TOASTS_AVAILABLE:
-            self.toaster = WindowsToaster('Voice Transcription')
-        else:
-            self.toaster = None
+        self.tray = tray_indicator or TrayIndicator()
+        self.health_error = None
+        self.workflow_error = None
+        self.initialization_error = None
+        self.instance_lock_socket = None
+
+        # Legacy toast initialization intentionally disabled.
+        # if TOASTS_AVAILABLE:
+        #     self.toaster = WindowsToaster('Voice Transcription')
+        # else:
+        #     self.toaster = None
 
         self.keyboard_controller = keyboard.Controller()
 
@@ -62,10 +88,12 @@ class GlobalHotkeyListener:
 
         # Threading controls
         self.currently_recording = False
-        self.toast_queue = []
+        self.state_lock = threading.Lock()
 
         # Recording mode tracking
-        self.recording_mode = "normal"  # normal, gpt_direct, gpt_clipboard
+        self.recording_mode = "normal"  # normal, gpt_direct, gpt_clipboard, academic_scientific
+        self.last_unmodified_forward_at = None
+        self.double_forward_window_seconds = get_double_forward_window_seconds()
 
         # Reference to self for win32 event filter
         self.listener_instance = None
@@ -82,8 +110,7 @@ class GlobalHotkeyListener:
             xbutton = (data.mouseData >> 16) & 0xFFFF
 
             if xbutton == 1:  # XBUTTON1 = Back button - STOP recording
-                if self.currently_recording:
-                    self.recording = False
+                self._stop_recording()
 
                 # Suppress the navigation event
                 if self.listener_instance:
@@ -96,15 +123,7 @@ class GlobalHotkeyListener:
                 ctrl_pressed = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0 if GetAsyncKeyState else False
                 shift_pressed = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0 if GetAsyncKeyState else False
 
-                if ctrl_pressed:
-                    self.recording_mode = "gpt_direct"
-                elif shift_pressed:
-                    self.recording_mode = "gpt_clipboard"
-                else:
-                    self.recording_mode = "normal"
-
-                # Trigger recording start
-                self._trigger_recording(f"mouse_forward_x2_{self.recording_mode}")
+                self._handle_forward_press(ctrl_pressed, shift_pressed)
                 # Suppress the navigation event
                 if self.listener_instance:
                     self.listener_instance.suppress_event()
@@ -122,52 +141,157 @@ class GlobalHotkeyListener:
         # Allow all other events
         return True
 
-    def show_toast(self, message, duration=None):
-        """Show Windows toast notification - thread-safe version."""
-        if not TOASTS_AVAILABLE or not self.toaster:
+    def _handle_forward_press(self, ctrl_pressed=False, shift_pressed=False, pressed_at=None):
+        """Start a mouse mode or promote a rapid unmodified pair to academic mode."""
+        pressed_at = time.monotonic() if pressed_at is None else pressed_at
+        should_start = False
+        recognized_academic = False
+        source = "mouse_forward_normal"
+
+        with self.state_lock:
+            if ctrl_pressed or shift_pressed:
+                self.last_unmodified_forward_at = None
+                if self.currently_recording:
+                    return "ignored"
+
+                self.recording_mode = "gpt_direct" if ctrl_pressed else "gpt_clipboard"
+                source = f"mouse_forward_{self.recording_mode}"
+                should_start = True
+            elif not self.currently_recording:
+                self.recording_mode = "normal"
+                self.last_unmodified_forward_at = pressed_at
+                should_start = True
+            else:
+                first_press = self.last_unmodified_forward_at
+                self.last_unmodified_forward_at = None
+                if (
+                    self.recording_mode == "normal"
+                    and first_press is not None
+                    and 0 <= pressed_at - first_press <= self.double_forward_window_seconds
+                ):
+                    self.recording_mode = "academic_scientific"
+                    recognized_academic = True
+
+        if recognized_academic:
+            return "academic_scientific"
+
+        if should_start:
+            self._trigger_recording(source)
+            return "started"
+
+        return "ignored"
+
+    def _stop_recording(self):
+        """Stop the active capture and invalidate any pending double-forward gesture."""
+        should_show_stopping = False
+        with self.state_lock:
+            self.last_unmodified_forward_at = None
+            if self.currently_recording and self.recording:
+                self.recording = False
+                should_show_stopping = True
+
+        if should_show_stopping:
+            self._set_tray_state(TrayState.STOPPING)
+
+    # Legacy toast methods intentionally disabled. Tray state and error methods
+    # below are the only active user-feedback path.
+    # def show_toast(self, message, duration=None):
+    #     if not TOASTS_AVAILABLE or not self.toaster:
+    #         return
+    #     self.toast_queue.append((message, duration))
+    #
+    # def show_brief_toast(self, message):
+    #     self.show_toast(message, duration="short")
+    #
+    # def _process_toast_queue(self):
+    #     while self.toast_queue:
+    #         message, duration = self.toast_queue.pop(0)
+    #         toast = Toast()
+    #         toast.text_fields = [message]
+    #         self.toaster.show_toast(toast)
+
+    def _set_tray_state(self, state, detail=None):
+        tray = getattr(self, "tray", None)
+        if tray:
+            tray.set_state(state, detail)
+
+    def acquire_single_instance_lock(self):
+        """Reserve a local port so a second listener cannot create another icon."""
+        if self.instance_lock_socket is not None:
+            return True
+        lock_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            lock_socket.bind(("127.0.0.1", 8768))
+            lock_socket.listen(1)
+        except OSError:
+            lock_socket.close()
+            return False
+        self.instance_lock_socket = lock_socket
+        return True
+
+    def _sync_tray_error(self):
+        tray = getattr(self, "tray", None)
+        if not tray:
             return
+        error = getattr(self, "workflow_error", None) or getattr(self, "health_error", None)
+        if error:
+            tray.set_error(error)
+        else:
+            tray.clear_error()
 
-        # Queue toast for main thread to display
-        self.toast_queue.append((message, duration))
+    def _set_workflow_error(self, message):
+        self.workflow_error = str(message)
+        self._sync_tray_error()
 
-    def show_brief_toast(self, message):
-        """Show a brief toast that disappears quickly."""
-        self.show_toast(message, duration="short")
-
-    def _process_toast_queue(self):
-        """Process queued toasts from main thread."""
-        while self.toast_queue:
-            message, duration = self.toast_queue.pop(0)
-            try:
-                toast = Toast()
-                toast.text_fields = [message]
-                self.toaster.show_toast(toast)
-            except Exception:
-                pass
+    def _clear_workflow_error(self):
+        self.workflow_error = None
+        self._sync_tray_error()
 
     def is_service_running(self):
         """Check if the transcription service is running."""
+        return self._is_port_open(self.server_port)
+
+    @staticmethod
+    def _is_port_open(port):
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(2)
-            result = sock.connect_ex(('localhost', self.server_port))
+            sock.settimeout(0.5)
+            result = sock.connect_ex(('localhost', port))
             sock.close()
             return result == 0
-        except:
+        except Exception:
             return False
+
+    def is_gpt_service_running(self):
+        """Check if the GPT route service is accepting connections."""
+        return self._is_port_open(8767)
+
+    def _refresh_service_health(self):
+        """Update the recoverable service/audio problem shown on the tray icon."""
+        problems = []
+        if not self.is_service_running():
+            problems.append("transcription service unavailable")
+        if not self.is_gpt_service_running():
+            problems.append("GPT service unavailable")
+        if not self.is_initialized:
+            problems.append(self.initialization_error or "audio input unavailable")
+
+        self.health_error = "; ".join(problems) if problems else None
+        self._sync_tray_error()
+        return not problems
 
     def wait_for_service(self):
         """Wait for the transcription service to start."""
+        self.health_error = "Waiting for transcription service"
+        self._sync_tray_error()
         while self.running and not self.is_service_running():
             time.sleep(1)
 
         if self.running:
             # Pre-initialize audio system for instant response
             self.pre_initialize_audio()
-            if self.is_initialized:
-                self.show_toast("🎯 Voice Ready (Forward/Ctrl+Forward/Shift+Forward)")
-            else:
-                self.show_toast("⚠️ Voice ready (audio init failed)")
+            self._set_tray_state(TrayState.READY)
+            self._refresh_service_health()
 
     def pre_initialize_audio(self):
         """Pre-initialize audio system for instant recording response."""
@@ -203,9 +327,11 @@ class GlobalHotkeyListener:
                 self._warm_service_connection()
 
             self.is_initialized = True
+            self.initialization_error = None
 
-        except Exception:
+        except Exception as exc:
             self.is_initialized = False
+            self.initialization_error = f"audio initialization failed: {exc}"
 
     def _warm_service_connection(self):
         """Pre-warm the service connection to reduce first-request latency."""
@@ -220,11 +346,13 @@ class GlobalHotkeyListener:
     def record_audio_fast(self):
         """Record audio until ESC is pressed - optimized for instant start."""
         if not self.is_service_running():
-            self.show_toast("❌ Transcription service not running")
+            self._set_workflow_error("Transcription service not running")
+            self._set_tray_state(TrayState.READY)
             return None
 
         self.audio_buffer = []
         self.recording = True
+        self._set_tray_state(TrayState.RECORDING)
 
         def audio_callback(indata, frames, time_info, status):
             if self.recording:
@@ -233,7 +361,7 @@ class GlobalHotkeyListener:
         # Set up listeners for stop recording (ESC key or XButton1)
         def on_key_press_recording(key):
             if key == Key.esc:
-                self.recording = False
+                self._stop_recording()
                 return False  # Stop listener
 
         def on_mouse_click_recording(x, y, button, pressed):
@@ -241,7 +369,7 @@ class GlobalHotkeyListener:
                 return
             # Button.x1 (back button - bottom side) for stop recording
             if button == Button.x1:
-                self.recording = False
+                self._stop_recording()
                 return False  # Stop listener
 
         keyboard_listener = KeyboardListener(on_press=on_key_press_recording)
@@ -258,21 +386,20 @@ class GlobalHotkeyListener:
                 dtype='float32',
                 blocksize=int(self.sample_rate * 0.1)  # Pre-configured chunk size
             ):
-                # Show initial recording toast
-                self.show_toast("🎤 Recording... (Press ESC to transcribe)")
-
                 start_time = time.time()
 
                 while self.recording:
                     elapsed = time.time() - start_time
 
                     if elapsed > 180:  # Max 3 minutes
-                        self.show_brief_toast("⏰ 3 minute recording limit reached")
+                        self._set_tray_state(TrayState.STOPPING, "Stopping — 3 minute limit reached")
+                        self.recording = False
                         break
                     time.sleep(0.1)
 
         except Exception as e:
-            self.show_toast(f"❌ Recording error: {e}")
+            self._set_workflow_error(f"Recording error: {e}")
+            self._set_tray_state(TrayState.READY)
             return None
 
         finally:
@@ -280,18 +407,12 @@ class GlobalHotkeyListener:
             mouse_listener_recording.stop()
 
         if not self.audio_buffer:
+            self._set_workflow_error("No audio was captured")
+            self._set_tray_state(TrayState.READY)
             return None
 
         # Combine audio chunks
         audio_data = np.concatenate(self.audio_buffer)
-        duration = len(audio_data) / self.sample_rate
-
-        # Show transcription notification for longer recordings or GPT modes
-        if self.recording_mode in ["gpt_direct", "gpt_clipboard"]:
-            self.show_brief_toast("✨ Transcribing and sending to GPT...")
-        elif duration > 15:
-            self.show_brief_toast("🔄 Transcribing...")
-
         return audio_data
 
     def send_transcription_request(self, audio_data):
@@ -400,26 +521,31 @@ class GlobalHotkeyListener:
                 time.sleep(0.05)  # Brief wait for paste to complete before restoring
                 pyperclip.copy(original_clipboard)
 
-    def paste_text(self, text):
+    def paste_text(self, text, recording_mode=None):
         """Handle text output based on recording mode."""
         try:
             # Store in voice buffer
             self.last_transcription = text
+            mode = recording_mode or self.recording_mode
 
-            if self.recording_mode == "normal":
+            if mode == "normal":
                 # Normal mode - paste transcription via clipboard (prevents React update loops)
                 self.paste_via_clipboard(text)
+                return True
 
-            elif self.recording_mode == "gpt_direct":
+            elif mode == "gpt_direct":
                 # GPT direct mode - send only transcription to GPT
+                self._set_tray_state(TrayState.GPT_GENERAL)
                 response = self.send_to_gpt(text)
                 if response:
                     normalized_response = self.normalize_gpt_response(response)
                     self.paste_via_clipboard(normalized_response)
+                    return True
                 else:
-                    self.show_toast("❌ GPT request failed")
+                    self._set_workflow_error("GPT request failed")
+                    return False
 
-            elif self.recording_mode == "gpt_clipboard":
+            elif mode == "gpt_clipboard":
                 # GPT with clipboard mode - combine with clipboard and send to GPT
                 try:
                     clipboard = pyperclip.paste().strip() if pyperclip.paste() else ""
@@ -431,20 +557,31 @@ class GlobalHotkeyListener:
                 else:
                     combined = text
 
-                # Toast already shown during transcription for longer recordings
+                self._set_tray_state(TrayState.GPT_GENERAL)
                 response = self.send_to_gpt(combined)
                 if response:
                     normalized_response = self.normalize_gpt_response(response)
                     self.paste_via_clipboard(normalized_response)
+                    return True
                 else:
-                    self.show_toast("❌ GPT request failed")
+                    self._set_workflow_error("GPT request failed")
+                    return False
 
-            # Reset to normal mode after processing
-            self.recording_mode = "normal"
+            elif mode == "academic_scientific":
+                self._set_tray_state(TrayState.GPT_ACADEMIC)
+                response = self.send_to_gpt(text, mode="academic_scientific")
+                if response:
+                    self.paste_via_clipboard(response.strip())
+                    return True
+                else:
+                    self._set_workflow_error("Academic/scientific GPT request failed")
+                    return False
 
         except Exception as e:
-            self.show_toast(f"❌ Failed to process: {e}")
-            self.recording_mode = "normal"  # Reset on error
+            self._set_workflow_error(f"Failed to process: {e}")
+            return False
+        finally:
+            self.recording_mode = "normal"
 
     def handle_hotkey_trigger(self):
         """Handle the hotkey trigger - record and transcribe with optimized speed."""
@@ -456,17 +593,33 @@ class GlobalHotkeyListener:
         if audio_data is None:
             return
 
+        # Freeze the mode before transcription/API processing begins. Forward
+        # presses after capture ends cannot reclassify this request.
+        with self.state_lock:
+            self.last_unmodified_forward_at = None
+            recording_mode = self.recording_mode
+
         # Send for transcription
+        self._set_tray_state(TrayState.TRANSCRIBING)
         text, error = self.send_transcription_request(audio_data)
 
         if text:
             # Auto-paste the transcribed text
-            self.paste_text(text)
+            success = self.paste_text(text, recording_mode=recording_mode)
+            if success:
+                self._clear_workflow_error()
+                self._refresh_service_health()
         else:
-            self.show_toast(f"❌ Transcription failed: {error}")
+            self._set_workflow_error(f"Transcription failed: {error}")
+
+        self._set_tray_state(TrayState.READY)
 
     def on_hotkey_triggered(self):
         """Called when Ctrl+Alt+A is pressed."""
+        with self.state_lock:
+            self.last_unmodified_forward_at = None
+            if not self.currently_recording:
+                self.recording_mode = "normal"
         self._trigger_recording("keyboard")
 
     def on_mouse_button_pressed(self, x, y, button, pressed):
@@ -481,24 +634,32 @@ class GlobalHotkeyListener:
 
     def _trigger_recording(self, source):
         """Common method to trigger recording from keyboard or mouse."""
-        # Prevent duplicate execution
-        if self.currently_recording:
-            return
+        with self.state_lock:
+            # Prevent duplicate execution
+            if self.currently_recording:
+                return False
 
-        self.currently_recording = True
+            self.currently_recording = True
 
         # Trigger transcription in a separate thread to avoid blocking
         thread = threading.Thread(target=self._handle_hotkey_with_cleanup, daemon=True)
         thread.start()
+        return True
 
     def _handle_hotkey_with_cleanup(self):
         """Wrapper to handle hotkey with proper cleanup."""
         try:
             self.handle_hotkey_trigger()
+        except Exception as exc:
+            self._set_workflow_error(f"Voice workflow failed: {exc}")
         finally:
-            self.currently_recording = False
+            with self.state_lock:
+                self.currently_recording = False
+                self.last_unmodified_forward_at = None
+                self.recording_mode = "normal"
+            self._set_tray_state(TrayState.READY)
 
-    def send_to_gpt(self, prompt):
+    def send_to_gpt(self, prompt, mode="general"):
         """Send prompt to GPT service and get response."""
         try:
             # Connect to GPT service (port 8767 to avoid conflicts)
@@ -509,7 +670,8 @@ class GlobalHotkeyListener:
             # Prepare request
             request = {
                 'action': 'gpt_query',
-                'prompt': prompt
+                'prompt': prompt,
+                'mode': mode
             }
 
             # Send request
@@ -543,6 +705,10 @@ class GlobalHotkeyListener:
 
     def start_listening(self):
         """Start the global hotkey listener."""
+        if not self.acquire_single_instance_lock():
+            return
+        self.tray.start()
+        self._set_tray_state(TrayState.READY, "Starting")
         # Wait for service to be ready
         self.wait_for_service()
 
@@ -566,21 +732,28 @@ class GlobalHotkeyListener:
 
             with GlobalHotKeys(hotkeys) as hotkey_listener:
                 self.hotkey_listener = hotkey_listener
+                last_health_check = 0.0
 
                 while self.running:
-                    # Process any queued toasts from main thread
-                    self._process_toast_queue()
+                    now = time.monotonic()
+                    if not self.currently_recording and now - last_health_check >= 5.0:
+                        self._refresh_service_health()
+                        last_health_check = now
                     time.sleep(0.1)
 
         except Exception as e:
-            self.show_toast(f"❌ Hotkey listener error: {e}")
+            self._set_workflow_error(f"Hotkey listener error: {e}")
+            self._set_tray_state(TrayState.READY)
 
     def stop(self):
         """Stop the hotkey and mouse listeners."""
         self.running = False
         if self.mouse_listener:
             self.mouse_listener.stop()
-        self.show_toast("🔴 Voice hotkey listener stopped")
+        if self.instance_lock_socket:
+            self.instance_lock_socket.close()
+            self.instance_lock_socket = None
+        self.tray.stop()
 
 
 def signal_handler(signum, frame):
@@ -599,4 +772,5 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         listener.stop()
     except Exception as e:
-        listener.show_toast(f"❌ Hotkey listener crashed: {e}")
+        listener._set_workflow_error(f"Hotkey listener crashed: {e}")
+        listener.stop()

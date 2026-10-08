@@ -30,18 +30,19 @@ start "GPT Service" pythonw gpt_service.py
 REM Wait a moment for GPT service to initialize
 timeout /t 2 /nobreak >nul
 
-REM Start the voice hotkey listener (windowless)
-echo Starting voice hotkey listener...
+REM Start the voice hotkey listener and persistent tray microphone (windowless)
+echo Starting voice hotkey listener and tray microphone...
 start "Voice Hotkey" pythonw hotkey_listener.py
 
 echo.
 echo Voice transcription services started!
 echo - Transcription service (Whisper turbo, GPU-accelerated)
 echo - GPT service (model from .env)
-echo - Hotkey listener (mouse/keyboard)
+echo - Hotkey listener (mouse/keyboard + tray microphone)
 echo.
 echo Hotkeys:
 echo   Forward button     - Normal transcription
+echo   Double Forward     - Academic/Scientific revision
 echo   Ctrl+Forward       - GPT mode
 echo   Shift+Forward      - GPT + clipboard
 echo   Back/Escape        - Stop recording
